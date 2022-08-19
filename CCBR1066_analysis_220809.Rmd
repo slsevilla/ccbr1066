@@ -1,0 +1,435 @@
+---
+title: "CCBR1066 RNA Analysis"
+author: "Samantha Sevilla"
+date: '2022-08-11'
+output: html_document
+editor_options: 
+  chunk_output_type: console
+---
+
+```{r pkg, echo=FALSE, warning=FALSE, include=FALSE}
+# package list
+list.of.packages=c("BiocManager","tidyr","DT","RUVSeq","RColorBrewer","textshape",
+                   "pheatmap","grid","dplyr","EnhancedVolcano","edgeR","DESeq2","ggplot2","plotly",
+                   "msigdbr","clusterProfiler","ggpubr","ggridges","factoextra","gplots","ReactomePA","org.Hs.eg.db")
+
+#install as needed
+new.packages <- list.of.packages[!(list.of.packages %in% installed.packages()[,"Package"])]
+if(length(new.packages)) BiocManager::install(new.packages)
+
+# source functions
+source('RNASeq_core_functions.R')
+
+# load packages
+invisible(lapply(list.of.packages, library, character.only = TRUE))
+
+#negate
+`%ni%` <- Negate(`%in%`)
+```
+
+```{r setup, include=FALSE}
+#dirs
+parent_dir="~/../../Volumes/ccbr1066/"
+input_dir = "~/../../Volumes/ccbr1066/pipeliner_220808/"
+output_dir = "~/../../Volumes/ccbr1066/analysis/r_analysis_220808/"
+dir.create(file.path(output_dir), showWarnings = FALSE)
+
+# group to ignore
+ignore_groups=c()
+
+#if a single treatment group, create one list, otherwise will need to identify for each step
+treatment_list=c("Mock","WT","Y318A")
+
+#same with control
+cntrl="KO"
+```
+
+```{r thresholds}
+# Threshold values
+log_cutoff=1.1
+fc_cutoff=1.1
+padj_cutoff=0.05
+species_in = "Homo sapiens"
+analysis_type = "DESeq2" #either limma or DESeq2
+
+#databases to include in analysis options include:
+#"C1","C2:BIOCARTA","C2:KEGG","C2:REACTOME","C2:WIKIPATHWAYS","C5:MF","C5:BP","C5:CC","H"
+db_list=c("C2:BIOCARTA","C2:KEGG","C2:WIKIPATHWAYS","C5:MF","C5:BP","C5:CC")
+
+# KMEANS thresholds
+nGenesKNN=2000	#Number of genes fro k-Means
+KmeansSeed=123
+kmeansNormalization="geneStandardization" #either L1Norm, geneMean, geneStandardization
+nClusters=4	#Number of clusters 
+```
+
+## **Data Processing**
+
+```{r contrast, include=FALSE}
+#id counts fil
+RSEM_file = "RawCountFile_RSEM_genes.txt" #normalized count file
+
+#groups input
+groups_df = read.csv(paste0(input_dir,"groups.tab"),sep="\t",header = FALSE)[,c("V1","V2")]
+colnames(groups_df) = c("sampleid","group")
+rownames(groups_df)=groups_df$sampleid
+
+## if there is a subset gene list, select files
+#gene_file = paste0(parent_dir,"docs/merged_gene_list_v2.csv")
+#pi_gene_df = read.csv(gene_file)
+
+# read in the contrast list
+contrast_df=read.csv(paste0(input_dir,"contrasts.tab"),header=FALSE,sep="\t")
+contrast_df$V1=gsub("  "," ",contrast_df$V1)
+contrast_df$V1=gsub("  "," ",contrast_df$V1)
+#contrast_df=contrast_df %>% separate(V1, c('CNTRL', 'TREATMENT'),sep=" ")
+colnames(contrast_df)=c("CNTRL","TREATMENT")
+contrast_df$contrast=paste0(contrast_df$CNTRL,"_vs_",contrast_df$TREATMENT)
+
+#filter
+groups_df=subset(groups_df, group %ni% ignore_groups)
+contrast_df=subset(contrast_df, (CNTRL %in% unique(groups_df$group)) | (TREATMENT %in% unique(groups_df$group)))
+```
+
+The following samples are included in this analysis:
+```{r dt_samp, echo=FALSE}
+DT::datatable(groups_df)
+```
+
+The following contrasts are including in this analysis:
+```{r dt_group, echo=FALSE}
+DT::datatable(contrast_df)
+```
+
+Raw counts are read in and filtered by counts per million reads (CPM). Filtering thresholds are set such that at least two samples must have a CPM of >0.5 to be reviewed. Two plots were generated for each sample: Relative log expression (RLE) plots and Principal Coordinate Analysis (PCA) plots.
+
+```{r raw_run, echo=FALSE, warning=FALSE, message=FALSE}
+#load counts
+raw_counts= read.csv(paste0(input_dir,"DEG_ALL/",RSEM_file),sep="\t")
+raw_counts=raw_counts[,c("symbol",groups_df$sampleid)]
+
+## Filter by CPM
+#CPM is calcualted as "how many counts would I get for a gene if the sample had a library size of 1M".
+raw_counts=column_to_rownames(raw_counts)
+raw_counts=ceiling(raw_counts)
+cpm_counts=edgeR::cpm(as.matrix(raw_counts))
+log_cpm_counts=log2(cpm_counts)
+keep=rowSums(cpm_counts>0.5)>2
+
+filtered=raw_counts[keep,]
+colnames(filtered)=shorten_names(colnames(filtered))
+
+#set colors
+colors <- brewer.pal(6, "Set2")
+x=shorten_names(groups_df$group)
+x=as.factor(x)#set pheno data
+
+#merge into object
+set <- newSeqExpressionSet(as.matrix(filtered),
+                           phenoData = data.frame(x, row.names=colnames(filtered)))
+
+#Plot results
+par(mfrow=c(1, 2), oma=c(3, 2, 0, 0)+0.1)
+plotRLE(as.matrix(filtered), outline=FALSE, ylim=c(-.5, .5), col=colors[x],las=2, cex.axis = .8)
+plotPCA(as.matrix(filtered), col=colors[x], cex=.8)
+mtext("Fig. Before Normalization", side=2, outer=TRUE, adj=0)
+```
+
+Upper quantile normalization was attempted. This provided some correction, however, some overlap between samples (WT and Y318A) is still observed.
+
+```{r upper, echo=FALSE}
+set_u <- betweenLaneNormalization(set, which="upper")
+par(mfrow=c(1, 2), oma=c(3, 2, 0, 0)+0.1)
+plotRLE(set_u, outline=FALSE, ylim=c(-.5, .5), col=colors[x],las=2, cex.axis = .8)
+plotPCA(set_u, col=colors[x], cex=.8)
+mtext("Fig. UpperQuant Normalization", side=2, outer=TRUE, adj=0)
+```
+
+Finally, DESEQ2 normalization was attempted. This provided the best correction and was selected as the normalization technique.
+
+```{r deseq, echo=FALSE, include=FALSE, warning=FALSE, message=FALSE}
+#run DESEQ2
+dds <- DESeqDataSetFromMatrix(countData = counts(set),
+                              colData = pData(set),
+                              design = ~ x)
+dds <- DESeq(dds)
+```
+
+```{r echo=FALSE}
+par(mfrow=c(1, 2), oma=c(3, 2, 0, 0)+0.1)
+plotRLE(counts(dds, normalize=TRUE), outline=FALSE, ylim=c(-.5, .5), col=colors[x],las=2, cex.axis = .8)
+plotPCA(counts(dds,normalize=TRUE), col=colors[x], cex=.8)
+mtext("Fig. DESEq2 Normalization", side=2, outer=TRUE, adj=0)
+```
+
+The data used for downstream analysis was DESEQ2 normalized and comparisons were made between samples.
+
+```{r deg_run, echo=FALSE, include=FALSE, warning=FALSE, message=FALSE}
+treatment="Mock"
+deg_group_add(cntrl,treatment)
+
+treatment="WT"
+deg_group_add(cntrl,treatment)
+
+treatment="Y318A"
+deg_group_add(cntrl,treatment)
+```
+
+## **Heatmaps**
+The most significant (p-value) genes (25 per sample) were identified. This joint list was to generate heatmaps across all samples. 
+```{r echo=FALSE,warning=FALSE, message=FALSE}
+####################
+# run heatmaps
+###################
+# find significant genes
+treatment="Mock"
+merged_sig_fc=create_sig_gene_df(cntrl,treatment,25)
+
+treatment="WT"
+merged_sig_fc=full_join(merged_sig_fc,create_sig_gene_df(cntrl,treatment,25))
+
+treatment="Y318A"
+merged_sig_fc=full_join(merged_sig_fc,create_sig_gene_df(cntrl,treatment,25))
+
+# fill in NA's in gene list
+merged_sig_fc=fillin_sig_gene_df(merged_sig_fc)
+
+#subset for logfc only
+heatmap_df=create_heatmap_df(merged_sig_fc,"")
+
+# create output df
+create_output_df(merged_sig_fc,nrow(merged_sig_fc),"")
+
+# create heatmap
+generate_heat_map(heatmap_df)
+```
+
+## **Volcano Plots**
+
+Volcano plots are created to show the statistical significance (p-value or FDR) versus magnitude of change (fold change).
+
+### Mock {.tabset}
+#### p-value
+```{r, echo=FALSE, warning=FALSE,message=FALSE,fig.height=7}
+treatment="Mock"
+type_in="pvalue"
+generate_volcano_plots(cntrl,treatment,type_in)
+```
+
+#### FDR
+```{r, echo=FALSE, warning=FALSE,message=FALSE,fig.height=7}
+type_in="FDR"
+generate_volcano_plots(cntrl,treatment,type_in)
+```
+
+### WT {.tabset}
+#### p-value
+```{r, echo=FALSE, warning=FALSE,message=FALSE,fig.height=7}
+treatment="WT"
+type_in="pvalue"
+generate_volcano_plots(cntrl,treatment,type_in)
+```
+
+#### FDR
+```{r, echo=FALSE, warning=FALSE,message=FALSE,fig.height=7}
+type_in="FDR"
+generate_volcano_plots(cntrl,treatment,type_in)
+```
+
+### Y318A {.tabset}
+#### p-value
+```{r, echo=FALSE, warning=FALSE,message=FALSE,fig.height=7}
+treatment="Y318A"
+type_in="pvalue"
+generate_volcano_plots(cntrl,treatment,type_in)
+```
+
+#### FDR
+```{r, echo=FALSE, warning=FALSE,message=FALSE,fig.height=7}
+type_in="FDR"
+generate_volcano_plots(cntrl,treatment,type_in)
+```
+
+
+## **Enriched Pathways (Single Contrast)** 
+Pathway analysis was performed using publicly available [databases](http://www.gsea-msigdb.org/gsea/msigdb/collections.jsp). 
+Pathways were sorted by signficance across all databases and the top results presented, including
+the total number of genes in the pathway (total_genes) and the percent of genes signficiantly
+differentiated in this dataset (percent_included) calculated. In addition, for each database, dotplots 
+for the top pathways, delineated by either suppressed and activated (2 pathways shown
+for each), are highlighted. Within these plots the enrichment scores (p-values) and gene ratio are shown as
+color and size, respectively. Finally, Ridgeplots are created for specific db's to visualize enriched 
+terms and their expression distributions of core enriched genes.
+
+### Enrichment {.tabset}
+
+#### Mock
+```{r oragsea_run1, echo=FALSE, message=FALSE, warning=FALSE}
+######################################################################
+# run ORA/GSEA
+######################################################################
+treatment="Mock"
+main_gsea_ora_function(cntrl_in=cntrl,
+              treat_in=treatment,
+              db_list,
+              top_path_value=50,
+              ORA_flag = "OFF",
+              GSEA_flag = "ON")
+```
+#### WT
+```{r oragsea_run2, echo=FALSE, message=FALSE, warning=FALSE}
+treatment="WT"
+main_gsea_ora_function(cntrl_in=cntrl,
+              treat_in=treatment,
+              db_list,
+              top_path_value=50,
+              ORA_flag = "OFF",
+              GSEA_flag = "ON")
+```
+
+#### Y318A
+```{r oragsea_run, echo=FALSE, message=FALSE, warning=FALSE}
+treatment="Y318A"
+main_gsea_ora_function(cntrl_in=cntrl,
+              treat_in=treatment,
+              db_list,
+              top_path_value=25,
+              ORA_flag = "OFF",
+              GSEA_flag = "ON")
+```
+
+## **K-Means Clustering, Enriched Pathways (Across Contrasts)** 
+### KMeans Clustering - Summary
+KMeans clustering was performed using four clusters, as justified in the elbow plot below. ORA analysis was performed on all clusters generating dotplots for each database.
+
+
+```{r echo=FALSE, warning=FALSE,message=FALSE,out.width="50%"}
+# include all genes in pathway analysis, not just sig genes
+padj_cutoff_save=padj_cutoff
+padj_cutoff=1
+set.seed(KmeansSeed)
+kout=main_kmeans_function(cntrl,treatment_list)
+```
+
+### KMeans Clustering - ORA Analysis {.tabset}
+Each cluster's gene list was used to perform ORA analysis.
+
+#### ClusterA
+```{r echo=FALSE, warning=FALSE,message=FALSE,fig.height=7}
+main_kmeans_ora_analysis(cluster_id=1,
+                         cl_in=kout)
+```
+
+#### ClusterB
+```{r echo=FALSE, warning=FALSE,message=FALSE,fig.height=7}
+main_kmeans_ora_analysis(cluster_id=2,
+                         cl_in=kout)
+```
+
+#### ClusterC
+```{r echo=FALSE, warning=FALSE,message=FALSE,fig.height=7}
+main_kmeans_ora_analysis(cluster_id=3,
+                         cl_in=kout)
+```
+
+#### ClusterD
+```{r echo=FALSE, warning=FALSE,message=FALSE,fig.height=7}
+main_kmeans_ora_analysis(cluster_id=4,
+                         cl_in=kout)
+```
+
+### KMeans Clustering - Per Cluster Heatmaps {.tabset}
+Each cluster's significant gene set (p-value and log2foldchange) was gathered and heatmaps generated.
+
+#### ClusterA
+```{r echo=FALSE, warning=FALSE,message=FALSE,fig.height=7}
+#reset the pvalue cutoff
+padj_cutoff=padj_cutoff_save
+main_heatmaps_DT_by_cluster_function(cluster_id=1,
+                                     cl_in=kout,
+                                     cntrl_in=cntrl,
+                                     treatment_list=treatment_list,
+                                     output_type="heatmap")
+```
+
+#### ClusterB
+```{r echo=FALSE, warning=FALSE,message=FALSE,fig.height=7}
+main_heatmaps_DT_by_cluster_function(cluster_id=2,
+                                     cl_in=kout,
+                                     cntrl_in=cntrl,
+                                     treatment_list=treatment_list,
+                                     output_type="heatmap")
+```
+
+#### ClusterC
+```{r echo=FALSE, warning=FALSE,message=FALSE,fig.height=7}
+main_heatmaps_DT_by_cluster_function(cluster_id=3,
+                                     cl_in=kout,
+                                     cntrl_in=cntrl,
+                                     treatment_list=treatment_list,
+                                     output_type="heatmap")
+```
+
+#### ClusterD
+```{r echo=FALSE, warning=FALSE,message=FALSE,fig.height=7}
+main_heatmaps_DT_by_cluster_function(cluster_id=4,
+                                     cl_in=kout,
+                                     cntrl_in=cntrl,
+                                     treatment_list=treatment_list,
+                                     output_type="heatmap")
+```
+
+### KMeans Clustering - Per Cluster Datatables {.tabset}
+Each cluster's gene set was gathered and datatables were generated.
+
+#### ClusterA
+```{r echo=FALSE, warning=FALSE,message=FALSE,fig.height=7}
+main_heatmaps_DT_by_cluster_function(cluster_id=1,
+                                     cl_in=kout,
+                                     cntrl_in=cntrl,
+                                     treatment_list=treatment_list,
+                                     output_type="DT")
+```
+
+#### ClusterB
+```{r echo=FALSE, warning=FALSE,message=FALSE,fig.height=7}
+main_heatmaps_DT_by_cluster_function(cluster_id=2,
+                                     cl_in=kout,
+                                     cntrl_in=cntrl,
+                                     treatment_list=treatment_list,
+                                     output_type="DT")
+```
+
+#### ClusterC
+```{r echo=FALSE, warning=FALSE,message=FALSE,fig.height=7}
+main_heatmaps_DT_by_cluster_function(cluster_id=3,
+                                     cl_in=kout,
+                                     cntrl_in=cntrl,
+                                     treatment_list=treatment_list,
+                                     output_type="DT")
+```
+
+#### ClusterD
+```{r echo=FALSE, warning=FALSE,message=FALSE,fig.height=7}
+main_heatmaps_DT_by_cluster_function(cluster_id=4,
+                                     cl_in=kout,
+                                     cntrl_in=cntrl,
+                                     treatment_list=treatment_list,
+                                     output_type="DT")
+```
+
+## **Selected Pathways** 
+
+Pathways of interest can be reviewed per sample, upon request. For example in contrast "Mock_vs_KO" pathway "GOCC_CELL_SURFACE" from the database "C5:CC" is reviewed below. All significant genes (p-value and log2foldchange) that were implicated in this pathway were plotted in a heatmap, as well as a in a GSEA plot. Finally, a datatable of all genes included in the pathway are provided for review.
+
+```{r, selectpath_run, echo=FALSE, warning=FALSE,message=FALSE,out.width="50%"}
+######################################################################
+# run specific pathway analysis
+######################################################################
+treatment="Mock"
+main_selectpath_function(t2g="C5:CC",
+                        type_in="GSEA",
+                        path_id="GOCC_CELL_SURFACE",
+                       cntrl_in=cntrl,
+                       treat_in=treatment)
+```
