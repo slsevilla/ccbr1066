@@ -521,7 +521,7 @@ gsea_plus_plot <- function(gl,t2g,contrast_in){
   return(pf)
 }
 
-gsea_plus_plot2 <- function(gl,t2g,contrast_in){
+gsea_plus_plot2 <- function(gl,t2g,contrast_in,select_flag="OFF"){
   # shorthand species
   if (species_in=="Homo sapiens"){
     species_short="hsa"
@@ -569,8 +569,7 @@ gsea_plus_plot2 <- function(gl,t2g,contrast_in){
                  OrgDb= get(org_db),
                  ont=ont_id,
                  verbose= FALSE)
-    ridgeplot(result, label_format = 30, showCategory = 5, orderBy="p.adjust")
-    
+
   } else if ((t2g=="C1") | (t2g=="C2:BIOCARTA") | (t2g=="H")){
     pulled_db=db_lookup(t2g)
     result=GSEA(geneList=gl,
@@ -578,43 +577,49 @@ gsea_plus_plot2 <- function(gl,t2g,contrast_in){
                 eps=0,
                 pAdjustMethod = "BH",
                 TERM2GENE = pulled_db)
-    ridgeplot(result, label_format = 30, showCategory = 5, orderBy="p.adjust")
   } else {
     print (paste0(t2g, ": DB selected is not valid"))
   }
   
-  # save datatable
-  resultdf=as.data.frame(result)
-  ttl_abbrev=sub(" ","_",sub(":","_",t2g))
-  fpath=paste0(output_dir,"GSEA_",contrast_in[1],"-",contrast_in[2],"_table_",ttl_abbrev,".txt")
-  write.table(resultdf,file=fpath,quote=FALSE,sep="\t",row.names = FALSE,col.names = TRUE)
-  
-  # create dot plots for all DB, ridgeplots for specific DB's
-  if(nrow(result)==0){
-    pf = ggparagraph( paste0("\n\n\n No Sig Results for GSEA:",t2g,
-                             "\n-",contrast_in[1]), 
-                      size = 20, face = "bold")
+  # breakpoint for the select_pathway function versus standard analysis
+  if (select_flag=="ON"){ 
+    return(result)
   } else{
-    print("OK")
-    p1 = dotplot(result,
-                 title=paste0(contrast_in,"\nGSEA:",t2g),
-                 font.size = 6, showCategory=2, split=".sign",orderBy="p.adjust") +
-      facet_grid(.~.sign)
-    p2 = ridgeplot(result, label_format = 30, showCategory = 4, orderBy="p.adjust") +
-      labs(x = "Enrichment distribution for top 5 pathways") + 
-      theme(text = element_text(size=6),
-            axis.text.x = element_text(size=6),
-            axis.text.y = element_text(size=5.5))
-    pcol <- cowplot::plot_grid(
-      p1 + theme(legend.position="none"),
-      p2 + theme(legend.position="none"),
-      nrow = 2
-    )
-    legend<-get_legend(p1)
-    pf=cowplot::plot_grid(pcol,legend,rel_widths = c(3, .4))
-    print(pf)
+    # save datatable
+    resultdf=as.data.frame(result)
+    ttl_abbrev=sub(" ","_",sub(":","_",t2g))
+    fpath=paste0(output_dir,"GSEA_",contrast_in[1],"-",contrast_in[2],"_table_",ttl_abbrev,".txt")
+    write.table(resultdf,file=fpath,quote=FALSE,sep="\t",row.names = FALSE,col.names = TRUE)
+    
+    # create dot plots for all DB, ridgeplots for specific DB's
+    if(nrow(result)==0){
+      pf = ggparagraph( paste0("\n\n\n No Sig Results for GSEA:",t2g,
+                               "\n-",contrast_in[1]), 
+                        size = 20, face = "bold")
+    } else{
+      p1 = dotplot(result,
+                   title=paste0(contrast_in,"\nGSEA:",t2g),
+                   font.size = 6, showCategory=2, split=".sign",orderBy="p.adjust") +
+        facet_grid(.~.sign)
+      p2 = ridgeplot(result, label_format = 30, showCategory = 4, orderBy="p.adjust") +
+        labs(x = "Enrichment distribution for top 5 pathways") + 
+        theme(text = element_text(size=6),
+              axis.text.x = element_text(size=6),
+              axis.text.y = element_text(size=5.5))
+      pcol <- cowplot::plot_grid(
+        p1 + theme(legend.position="none"),
+        p2 + theme(legend.position="none"),
+        nrow = 2
+      )
+      legend<-get_legend(p1)
+      pf=cowplot::plot_grid(pcol,legend,rel_widths = c(3, .4))
+      print(pf)
+    }
+    return(pf)
   }
-  return(pf)
+  print("NOT HERE")
+  
+  
 }
 
 # save plots
@@ -781,12 +786,15 @@ main_gsea_ora_function<-function(cntrl_in,treat_in,db_list,top_path_value,ORA_fl
   # run GSEA
   g=list()
   if (GSEA_flag=="ON"){
-    # create GSEA genelist
-    gsea_genelist=deg2geneList2(deg,t2g)
     
-    #for each annotation db, run GSEA, save plots
+    # for each annotation db, create GSEA gene list - must be done within loop
+    # to handle differences in naming list 
     i=1
     for (db_id in db_list){
+      # create GSEA genelist
+      gsea_genelist=deg2geneList2(deg,t2g=db_id)
+      
+      # run GSEA, save plots
       g[[i]]=gsea_plus_plot2(gl=gsea_genelist,t2g=db_id,contrast_in=contras)
       i=i+1
     }
@@ -1045,21 +1053,23 @@ generate_heat_map_select<-function(select_deg,contras){
 }
 
 # create gseaplot
-gsea_plus_plots_select<-function(deg,t2g,path_id){
+gsea_plus_plots_select<-function(deg,t2g,path_id,contras){
+ 
   # create GSEA genelist
-  gsea_genelist=deg2geneList(deg)
+  gsea_genelist=deg2geneList2(deg,t2g=t2g)
   
-  # pull db and run GSEA results
-  pulled_db=db_lookup(t2g)
-  result=GSEA(geneList = gsea_genelist,TERM2GENE = pulled_db,eps = 0, pvalueCutoff = padj_cutoff)
+  # run GSEA, save plots
+  result=gsea_plus_plot2(gl=gsea_genelist,t2g=t2g,contrast_in=contras,select_flag="ON")
   
   #get rowname of pathway
   result_df=as.data.frame(result)
   rownames(result_df) <- NULL
-  row_id=as.numeric(rownames(subset(result_df,Description==path_id))[[1]])
+  row_id=as.numeric(rownames(subset(result_df,ID==path_id))[[1]])
+  path_desc=subset(result_df,ID==path_id)$Description[[1]]
   
   # create plot
-  p1=gseaplot(result, by = "all", title = path_id, geneSetID =row_id)
+  p1=gseaplot(result, by = "all", title = paste0(path_id,": ",path_desc),
+              geneSetID =row_id)
   pf=p1&theme(text = element_text(size=8),
               axis.text.x = element_text(size=8),
               axis.text.y = element_text(size=8),
@@ -1076,23 +1086,33 @@ main_selectpath_function<-function(cntrl_in,treat_in,type_in,t2g,path_id){
   ttl_abbrev=sub(" ","_",sub(":","_",t2g))
   fpath=paste0(output_dir,type_in,"_",contras[1],"-",contras[2],"_table_",ttl_abbrev,".txt")
   path_df=read.csv(fpath,sep="\t")
+  
+  #check pathway exists
+  if (nrow(subset(path_df,ID==path_id))==0){
+    stop(paste0("The selected pathway (",path_id,") does not exist in the annotation database (",t2g,
+                "). Please select a valid combination"))
+  }
+  
+  # create gene list from pathway
   genes_in_pathway=strsplit(subset(path_df,ID==path_id)$core_enrichment,"/")[[1]]
   
-  # read in created deg, subset for genes in pathway
+  # read in created deg
   fpath=paste0(output_dir,"DESeq2_",contras[1],"-",contras[2],"_DEG_allgenes.txt")
   deg=read.csv(fpath,header=TRUE,sep="\t")
-  select_deg=subset(deg, gene %in% genes_in_pathway)
   
-  if (nrow(select_deg)==0){
-    print ("The selected pathway : annotation db is not valid. Please check inputs")
-    exit()
-  }
+  # subset deg for genes,
+  #convert ENTREZID if necessary
+  if ((t2g!="C1") | (t2g!="C2:BIOCARTA") | (t2g!="H")){
+    gene_ref_db = capture_entrezids(deg)
+    genes_in_pathway=subset(gene_ref_db,ENTREZID %in% genes_in_pathway)$gene
+  } 
+  select_deg=subset(deg, gene %in% genes_in_pathway)
   
   # create heatmaps
   p = generate_heat_map_select(select_deg,contras)
   
   # create gseaPlot
-  gsea_plus_plots_select(deg,t2g,path_id)
+  gsea_plus_plots_select(deg,t2g,path_id,contras)
   
   # return DT
   return(p)

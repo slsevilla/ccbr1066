@@ -433,7 +433,7 @@ main_heatmaps_DT_by_cluster_function(cluster_id=4,
 
 ## **Selected Pathways** 
 
-Pathways of interest can be reviewed per sample, upon request. For example in contrast "Mock_vs_KO" pathway "GOCC_CELL_SURFACE" from the database "C5:CC" is reviewed below. All significant genes (p-value and log2foldchange) that were implicated in this pathway were plotted in a heatmap, as well as a in a GSEA plot. Finally, a datatable of all genes included in the pathway are provided for review.
+Pathways of interest can be reviewed per sample, upon request. For example in contrast "Mock_vs_KO" pathway "GO:0098552: side of membrane" from the database "C5:CC" is reviewed below. All significant genes (p-value and log2foldchange) that were implicated in this pathway were plotted in a heatmap, as well as a in a GSEA plot. Finally, a datatable of all genes included in the pathway are provided for review.
 
 ```{r, selectpath_run, echo=FALSE, warning=FALSE,message=FALSE,out.width="50%"}
 ######################################################################
@@ -442,7 +442,7 @@ Pathways of interest can be reviewed per sample, upon request. For example in co
 treatment="Mock"
 main_selectpath_function(t2g="C5:CC",
                         type_in="GSEA",
-                        path_id="GOCC_CELL_SURFACE",
+                        path_id="GO:0098552",
                        cntrl_in=cntrl,
                        treat_in=treatment)
 ```
