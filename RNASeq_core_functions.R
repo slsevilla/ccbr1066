@@ -355,7 +355,8 @@ capture_entrezids<-function(input_df){
   return(output_df)
 }
 
-deg2geneList2<-function(deg,t2g){
+#set genelist for GSEA
+deg2geneList<-function(deg,t2g){
   # create refs of entrez:genes
   gene_ref_db=capture_entrezids(deg)
   
@@ -373,41 +374,6 @@ deg2geneList2<-function(deg,t2g){
   gsea_genelist=sort(gsea_genelist,decreasing=TRUE)
   
   return(gsea_genelist)
-}
-
-#set genelist for GSEA
-deg2geneList<-function(deg){
-  # create refs of entrez:genes
-  gene_ref_db=capture_entrezids(deg)
-  
-  #add entrezs to deg df
-  deg_anno_df=merge(gene_ref_db,deg,by="gene")
-  
-  # create genelist
-  gl=as.data.frame(deg_anno_df$gsea_ranking_score)
-  gl$GN=deg_anno_df$ENTREZID
-  colnames(gl)=c("Rank","ENTREZID")
-  
-  # handle infinitiy
-  if (analysis_type=="DESeq2"){
-    # remove NA and inf values from rank col
-    clean_list=gl$Rank
-    clean_list=clean_list[!is.na(clean_list)]
-    clean_list=clean_list[clean_list != "Inf"]
-    clean_list=clean_list[clean_list != "-Inf"]
-    
-    # set inf and -inf to the max/min values x 1.5
-    gl[gl == "Inf"]<-max(clean_list)*1.5
-    gl[gl == "-Inf"]<-min(clean_list)*1.5
-  }
-  
-  gl$absRank=abs(gl$Rank)
-  gl=gl[order(gl$absRank,decreasing = TRUE),]
-  gl=gl[match(unique(gl$ENTREZID),gl$ENTREZID),]
-  geneList=gl$Rank
-  names(geneList)=as.character(gl$ENTREZID)
-  geneList <- sort(geneList, decreasing = TRUE)
-  return(geneList)
 }
 
 # set the annotation dbs
@@ -450,6 +416,7 @@ db_lookup<-function(t2g){
   return(db_out)
 }
 
+# create a small legend
 addSmallLegend <- function(myPlot, pointSize = 2, textSize = 5, spaceLegend = 0.1) {
   myPlot +
     guides(shape = guide_legend(override.aes = list(size = pointSize)),
@@ -491,37 +458,7 @@ ora_plus_plot <- function(gl,t2g,contrast_in,n_show=3){
 }
 
 # plot GSEA
-gsea_plus_plot <- function(gl,t2g,contrast_in){
-  pulled_db=db_lookup(t2g)
-  result=GSEA(geneList = gl,TERM2GENE = pulled_db,eps = 0, pvalueCutoff = padj_cutoff)
-  resultdf=as.data.frame(result)
-  
-  ttl_abbrev=sub(" ","_",sub(":","_",t2g))
-  fpath=paste0(output_dir,"GSEA_",contrast_in[1],"-",contrast_in[2],"_table_",ttl_abbrev,".txt")
-  write.table(resultdf,file=fpath,quote=FALSE,sep="\t",row.names = FALSE,col.names = TRUE)
-  
-  if(nrow(result)==0){
-    pf = ggparagraph( paste0("\n\n\n No Sig Results for ", "GSEA:",t2g,"\n-",contrast_in[1]), 
-                      size = 20, face = "bold")
-  } else{
-    p1 = dotplot(result,
-                 title=paste0(contrast_in,"\n","GSEA:",t2g),
-                 font.size = 6, showCategory=2, split=".sign",orderBy="p.adjust") +
-      facet_grid(.~.sign)
-    
-    p2=ridgeplot(result, label_format = 30, showCategory = 4, orderBy="p.adjust") +
-      labs(x = "Enrichment distribution for top 5 pathways") 
-    p3=p2+theme(text = element_text(size=6),
-                axis.text.x = element_text(size=6),
-                axis.text.y = element_text(size=5.5))
-    
-    pf=cowplot::plot_grid(addSmallLegend(p1),p3,ncol=1)
-  }
-  
-  return(pf)
-}
-
-gsea_plus_plot2 <- function(gl,t2g,contrast_in,select_flag="OFF"){
+gsea_plus_plot <- function(gl,t2g,contrast_in,select_flag="OFF"){
   # shorthand species
   if (species_in=="Homo sapiens"){
     species_short="hsa"
@@ -617,9 +554,6 @@ gsea_plus_plot2 <- function(gl,t2g,contrast_in,select_flag="OFF"){
     }
     return(pf)
   }
-  print("NOT HERE")
-  
-  
 }
 
 # save plots
@@ -792,10 +726,10 @@ main_gsea_ora_function<-function(cntrl_in,treat_in,db_list,top_path_value,ORA_fl
     i=1
     for (db_id in db_list){
       # create GSEA genelist
-      gsea_genelist=deg2geneList2(deg,t2g=db_id)
+      gsea_genelist=deg2geneList(deg,t2g=db_id)
       
       # run GSEA, save plots
-      g[[i]]=gsea_plus_plot2(gl=gsea_genelist,t2g=db_id,contrast_in=contras)
+      g[[i]]=gsea_plus_plot(gl=gsea_genelist,t2g=db_id,contrast_in=contras)
       i=i+1
     }
     
@@ -1056,10 +990,10 @@ generate_heat_map_select<-function(select_deg,contras){
 gsea_plus_plots_select<-function(deg,t2g,path_id,contras){
  
   # create GSEA genelist
-  gsea_genelist=deg2geneList2(deg,t2g=t2g)
+  gsea_genelist=deg2geneList(deg,t2g=t2g)
   
   # run GSEA, save plots
-  result=gsea_plus_plot2(gl=gsea_genelist,t2g=t2g,contrast_in=contras,select_flag="ON")
+  result=gsea_plus_plot(gl=gsea_genelist,t2g=t2g,contrast_in=contras,select_flag="ON")
   
   #get rowname of pathway
   result_df=as.data.frame(result)
