@@ -145,7 +145,7 @@ fillin_sig_gene_df<-function(df_in){
 
 # creates heatmap formatted df with only log2fc values
 create_heatmap_df<-function(df_in,extra_filter=""){
-  df_out=select(df_in,contains("log"))
+  df_out=dplyr::select(df_in,contains("log"))
   
   # cleanup col names
   output_list=sub('--log2FoldChange', '',colnames(df_out))
@@ -506,14 +506,14 @@ gsea_plus_plot <- function(gl,t2g,contrast_in){
   } else{
     p1 = dotplot(result,
                  title=paste0(contrast_in,"\n","GSEA:",t2g),
-                 font.size = 6, showCategory=2, split=".sign") +
+                 font.size = 6, showCategory=2, split=".sign",orderBy="p.adjust") +
       facet_grid(.~.sign)
     
-    p2=ridgeplot(result, label_format = 30, showCategory = 5, orderBy="p.adjust") +
+    p2=ridgeplot(result, label_format = 30, showCategory = 4, orderBy="p.adjust") +
       labs(x = "Enrichment distribution for top 5 pathways") 
     p3=p2+theme(text = element_text(size=6),
                 axis.text.x = element_text(size=6),
-                axis.text.y = element_text(size=5.5)) 
+                axis.text.y = element_text(size=5.5))
     
     pf=cowplot::plot_grid(addSmallLegend(p1),p3,ncol=1)
   }
@@ -521,25 +521,14 @@ gsea_plus_plot <- function(gl,t2g,contrast_in){
   return(pf)
 }
 
-
 gsea_plus_plot2 <- function(gl,t2g,contrast_in){
-  # set contrast
-  contras=c(treatment_list[[1]],cntrl)
-  
-  # read in deg
-  deg_file = paste0(input_dir, "DEG_", contras[1],"-",contras[2],"_0.5_0.5/",analysis_type,
-                    "_DEG_",contras[1],"-",contras[2],"_all_genes.txt")
-  deg=read.csv(deg_file,header=TRUE,sep="\t")
-  
-  #create ranking list
-  gl=deg2geneList2(deg,t2g)
-  
   # shorthand species
   if (species_in=="Homo sapiens"){
     species_short="hsa"
     org_db="org.Hs.eg.db"
   } else if (species_in=="Mus musculus"){
     species_short="mmu"
+    org_db="org.Mm.eg.db"
   } else{
     print (paste0(species_in,": species not found"))
   }
@@ -606,17 +595,26 @@ gsea_plus_plot2 <- function(gl,t2g,contrast_in){
                              "\n-",contrast_in[1]), 
                       size = 20, face = "bold")
   } else{
-      p1 = dotplot(result,
-                   title=paste0(contrast_in,"\nGSEA:",t2g),
-                   font.size = 6, showCategory=2, split=".sign") +
-        facet_grid(.~.sign)
-      p2 = ridgeplot(result, label_format = 30, showCategory = 5, orderBy="p.adjust") +
-        labs(x = "Enrichment distribution for top 5 pathways") 
-      p3 = p2 + theme(text = element_text(size=6),
-                      axis.text.x = element_text(size=6),
-                      axis.text.y = element_text(size=5.5)) 
-    pf=cowplot::plot_grid(addSmallLegend(p1),p3,ncol=1)
+    print("OK")
+    p1 = dotplot(result,
+                 title=paste0(contrast_in,"\nGSEA:",t2g),
+                 font.size = 6, showCategory=2, split=".sign",orderBy="p.adjust") +
+      facet_grid(.~.sign)
+    p2 = ridgeplot(result, label_format = 30, showCategory = 4, orderBy="p.adjust") +
+      labs(x = "Enrichment distribution for top 5 pathways") + 
+      theme(text = element_text(size=6),
+            axis.text.x = element_text(size=6),
+            axis.text.y = element_text(size=5.5))
+    pcol <- cowplot::plot_grid(
+      p1 + theme(legend.position="none"),
+      p2 + theme(legend.position="none"),
+      nrow = 2
+    )
+    legend<-get_legend(p1)
+    pf=cowplot::plot_grid(pcol,legend,rel_widths = c(3, .4))
+    print(pf)
   }
+  return(pf)
 }
 
 # save plots
@@ -784,7 +782,7 @@ main_gsea_ora_function<-function(cntrl_in,treat_in,db_list,top_path_value,ORA_fl
   g=list()
   if (GSEA_flag=="ON"){
     # create GSEA genelist
-    gsea_genelist=deg2geneList(deg)
+    gsea_genelist=deg2geneList2(deg,t2g)
     
     #for each annotation db, run GSEA, save plots
     i=1
@@ -992,6 +990,9 @@ main_heatmaps_DT_by_cluster_function<-function(cl_in,cluster_id,cntrl_in,treatme
   }
   ensem_ids_sig=unique(unlist(ensem_ids_sig))
   
+  # merge ENS and symbols for consistency
+  rownames(sub_df)=paste0(rownames(sub_df),"|",sub_df$SYMBOL)
+  
   # create df of sig eids
   #create heatmap df, generate heatmaps
   heat_df=sub_df[ensem_ids_sig,]
@@ -1004,14 +1005,14 @@ main_heatmaps_DT_by_cluster_function<-function(cl_in,cluster_id,cntrl_in,treatme
   colnames(sub_df)=sub("..padj","_padj",colnames(sub_df))
   select_colnames=c(colnames(sub_df)[grepl("log2",colnames(sub_df))],
                     colnames(sub_df)[grepl("padj",colnames(sub_df))])
-  sub_df=sub_df[,c("SYMBOL",select_colnames)]
+  sub_df=sub_df[,c(select_colnames)]
   sub_df[is.na(sub_df) ] <- 0
+  
   # round df
   for (colid in select_colnames){
     sub_df[,colid]=signif(sub_df[,colid], digits=3)
   }
-  
-  
+
   if(output_type=="DT"){
     DT::datatable(sub_df, extensions = 'Responsive', 
                   caption=htmltools::tags$caption(paste0("KMeans Cluster ", LETTERS[cluster_id]) ,

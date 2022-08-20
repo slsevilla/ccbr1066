@@ -6,26 +6,7 @@ output: html_document
 editor_options: 
   chunk_output_type: console
 ---
-
-```{r pkg, echo=FALSE, warning=FALSE, include=FALSE}
-# package list
-list.of.packages=c("BiocManager","tidyr","DT","RUVSeq","RColorBrewer","textshape",
-                   "pheatmap","grid","dplyr","EnhancedVolcano","edgeR","DESeq2","ggplot2","plotly",
-                   "msigdbr","clusterProfiler","ggpubr","ggridges","factoextra","gplots","ReactomePA","org.Hs.eg.db")
-
-#install as needed
-new.packages <- list.of.packages[!(list.of.packages %in% installed.packages()[,"Package"])]
-if(length(new.packages)) BiocManager::install(new.packages)
-
-# source functions
-source('RNASeq_core_functions.R')
-
-# load packages
-invisible(lapply(list.of.packages, library, character.only = TRUE))
-
-#negate
-`%ni%` <- Negate(`%in%`)
-```
+## **User Parameters**
 
 ```{r setup, include=FALSE}
 #dirs
@@ -49,12 +30,13 @@ cntrl="KO"
 log_cutoff=1.1
 fc_cutoff=1.1
 padj_cutoff=0.05
-species_in = "Homo sapiens"
+species_in = "Homo sapiens" #either "Homo sapiens" or "Mus musculus"
 analysis_type = "DESeq2" #either limma or DESeq2
 
 #databases to include in analysis options include:
+#http://www.gsea-msigdb.org/gsea/msigdb/collections.jsp
 #"C1","C2:BIOCARTA","C2:KEGG","C2:REACTOME","C2:WIKIPATHWAYS","C5:MF","C5:BP","C5:CC","H"
-db_list=c("C2:BIOCARTA","C2:KEGG","C2:WIKIPATHWAYS","C5:MF","C5:BP","C5:CC")
+db_list=c("C2:BIOCARTA","C2:KEGG","C5:MF","C5:BP","C5:CC")
 
 # KMEANS thresholds
 nGenesKNN=2000	#Number of genes fro k-Means
@@ -62,6 +44,37 @@ KmeansSeed=123
 kmeansNormalization="geneStandardization" #either L1Norm, geneMean, geneStandardization
 nClusters=4	#Number of clusters 
 ```
+
+
+```{r pkg, echo=FALSE, warning=FALSE, include=FALSE}
+#species db
+if (species_in == "Homo sapiens"){
+  species_db="org.Hs.eg.db"
+} else if (species_in == "Mus musculus"){
+  species_db="org.Mm.eg.db"
+} else{
+    print("Species not approved")
+}
+
+# package list
+list.of.packages=c("BiocManager","tidyr","DT","RUVSeq","RColorBrewer","textshape",
+                   "pheatmap","grid","dplyr","EnhancedVolcano","edgeR","DESeq2","ggplot2","plotly",
+                   "msigdbr","clusterProfiler","ggpubr","ggridges","factoextra","gplots","ReactomePA",species_db)
+                   
+#install as needed
+new.packages <- list.of.packages[!(list.of.packages %in% installed.packages()[,"Package"])]
+if(length(new.packages)) BiocManager::install(new.packages)
+
+# source functions
+source('RNASeq_core_functions.R')
+
+# load packages
+invisible(lapply(list.of.packages, library, character.only = TRUE))
+
+#negate
+`%ni%` <- Negate(`%in%`)
+```
+
 
 ## **Data Processing**
 
@@ -147,7 +160,7 @@ mtext("Fig. UpperQuant Normalization", side=2, outer=TRUE, adj=0)
 
 Finally, DESEQ2 normalization was attempted. This provided the best correction and was selected as the normalization technique.
 
-```{r deseq, echo=FALSE, include=FALSE, warning=FALSE, message=FALSE}
+```{r deseq_run, echo=FALSE, include=FALSE, warning=FALSE, message=FALSE}
 #run DESEQ2
 dds <- DESeqDataSetFromMatrix(countData = counts(set),
                               colData = pData(set),
@@ -155,7 +168,7 @@ dds <- DESeqDataSetFromMatrix(countData = counts(set),
 dds <- DESeq(dds)
 ```
 
-```{r echo=FALSE}
+```{r deseq2_plot, echo=FALSE}
 par(mfrow=c(1, 2), oma=c(3, 2, 0, 0)+0.1)
 plotRLE(counts(dds, normalize=TRUE), outline=FALSE, ylim=c(-.5, .5), col=colors[x],las=2, cex.axis = .8)
 plotPCA(counts(dds,normalize=TRUE), col=colors[x], cex=.8)
@@ -177,7 +190,7 @@ deg_group_add(cntrl,treatment)
 
 ## **Heatmaps**
 The most significant (p-value) genes (25 per sample) were identified. This joint list was to generate heatmaps across all samples. 
-```{r echo=FALSE,warning=FALSE, message=FALSE}
+```{r heat_run, echo=FALSE,warning=FALSE, message=FALSE}
 ####################
 # run heatmaps
 ###################
@@ -210,42 +223,42 @@ Volcano plots are created to show the statistical significance (p-value or FDR) 
 
 ### Mock {.tabset}
 #### p-value
-```{r, echo=FALSE, warning=FALSE,message=FALSE,fig.height=7}
+```{r volc_run_p1, echo=FALSE, warning=FALSE,message=FALSE,fig.height=7}
 treatment="Mock"
 type_in="pvalue"
 generate_volcano_plots(cntrl,treatment,type_in)
 ```
 
 #### FDR
-```{r, echo=FALSE, warning=FALSE,message=FALSE,fig.height=7}
+```{r volc_run_f1, echo=FALSE, warning=FALSE,message=FALSE,fig.height=7}
 type_in="FDR"
 generate_volcano_plots(cntrl,treatment,type_in)
 ```
 
 ### WT {.tabset}
 #### p-value
-```{r, echo=FALSE, warning=FALSE,message=FALSE,fig.height=7}
+```{r volc_run_p2, echo=FALSE, warning=FALSE,message=FALSE,fig.height=7}
 treatment="WT"
 type_in="pvalue"
 generate_volcano_plots(cntrl,treatment,type_in)
 ```
 
 #### FDR
-```{r, echo=FALSE, warning=FALSE,message=FALSE,fig.height=7}
+```{r volc_run_f2, echo=FALSE, warning=FALSE,message=FALSE,fig.height=7}
 type_in="FDR"
 generate_volcano_plots(cntrl,treatment,type_in)
 ```
 
 ### Y318A {.tabset}
 #### p-value
-```{r, echo=FALSE, warning=FALSE,message=FALSE,fig.height=7}
+```{r volc_run_p3, echo=FALSE, warning=FALSE,message=FALSE,fig.height=7}
 treatment="Y318A"
 type_in="pvalue"
 generate_volcano_plots(cntrl,treatment,type_in)
 ```
 
 #### FDR
-```{r, echo=FALSE, warning=FALSE,message=FALSE,fig.height=7}
+```{r volc_run_f3, echo=FALSE, warning=FALSE,message=FALSE,fig.height=7}
 type_in="FDR"
 generate_volcano_plots(cntrl,treatment,type_in)
 ```
@@ -288,7 +301,7 @@ main_gsea_ora_function(cntrl_in=cntrl,
 ```
 
 #### Y318A
-```{r oragsea_run, echo=FALSE, message=FALSE, warning=FALSE}
+```{r oragsea_run3, echo=FALSE, message=FALSE, warning=FALSE}
 treatment="Y318A"
 main_gsea_ora_function(cntrl_in=cntrl,
               treat_in=treatment,
@@ -303,7 +316,7 @@ main_gsea_ora_function(cntrl_in=cntrl,
 KMeans clustering was performed using four clusters, as justified in the elbow plot below. ORA analysis was performed on all clusters generating dotplots for each database.
 
 
-```{r echo=FALSE, warning=FALSE,message=FALSE,out.width="50%"}
+```{r kmeans_prep, echo=FALSE, warning=FALSE,message=FALSE,out.width="50%"}
 # include all genes in pathway analysis, not just sig genes
 padj_cutoff_save=padj_cutoff
 padj_cutoff=1
@@ -315,25 +328,25 @@ kout=main_kmeans_function(cntrl,treatment_list)
 Each cluster's gene list was used to perform ORA analysis.
 
 #### ClusterA
-```{r echo=FALSE, warning=FALSE,message=FALSE,fig.height=7}
+```{r kmeans_run1, echo=FALSE, warning=FALSE,message=FALSE,fig.height=7}
 main_kmeans_ora_analysis(cluster_id=1,
                          cl_in=kout)
 ```
 
 #### ClusterB
-```{r echo=FALSE, warning=FALSE,message=FALSE,fig.height=7}
+```{r kmeans_run2, echo=FALSE, warning=FALSE,message=FALSE,fig.height=7}
 main_kmeans_ora_analysis(cluster_id=2,
                          cl_in=kout)
 ```
 
 #### ClusterC
-```{r echo=FALSE, warning=FALSE,message=FALSE,fig.height=7}
+```{r kmeans_run3, echo=FALSE, warning=FALSE,message=FALSE,fig.height=7}
 main_kmeans_ora_analysis(cluster_id=3,
                          cl_in=kout)
 ```
 
 #### ClusterD
-```{r echo=FALSE, warning=FALSE,message=FALSE,fig.height=7}
+```{r kmeans_run4, echo=FALSE, warning=FALSE,message=FALSE,fig.height=7}
 main_kmeans_ora_analysis(cluster_id=4,
                          cl_in=kout)
 ```
@@ -342,7 +355,7 @@ main_kmeans_ora_analysis(cluster_id=4,
 Each cluster's significant gene set (p-value and log2foldchange) was gathered and heatmaps generated.
 
 #### ClusterA
-```{r echo=FALSE, warning=FALSE,message=FALSE,fig.height=7}
+```{r kmeans_hp1, echo=FALSE, warning=FALSE,message=FALSE,fig.height=7}
 #reset the pvalue cutoff
 padj_cutoff=padj_cutoff_save
 main_heatmaps_DT_by_cluster_function(cluster_id=1,
@@ -353,7 +366,7 @@ main_heatmaps_DT_by_cluster_function(cluster_id=1,
 ```
 
 #### ClusterB
-```{r echo=FALSE, warning=FALSE,message=FALSE,fig.height=7}
+```{r kmeans_hp2, echo=FALSE, warning=FALSE,message=FALSE,fig.height=7}
 main_heatmaps_DT_by_cluster_function(cluster_id=2,
                                      cl_in=kout,
                                      cntrl_in=cntrl,
@@ -362,7 +375,7 @@ main_heatmaps_DT_by_cluster_function(cluster_id=2,
 ```
 
 #### ClusterC
-```{r echo=FALSE, warning=FALSE,message=FALSE,fig.height=7}
+```{r kmeans_hp3, echo=FALSE, warning=FALSE,message=FALSE,fig.height=7}
 main_heatmaps_DT_by_cluster_function(cluster_id=3,
                                      cl_in=kout,
                                      cntrl_in=cntrl,
@@ -371,7 +384,7 @@ main_heatmaps_DT_by_cluster_function(cluster_id=3,
 ```
 
 #### ClusterD
-```{r echo=FALSE, warning=FALSE,message=FALSE,fig.height=7}
+```{r kmeans_hp4, echo=FALSE, warning=FALSE,message=FALSE,fig.height=7}
 main_heatmaps_DT_by_cluster_function(cluster_id=4,
                                      cl_in=kout,
                                      cntrl_in=cntrl,
@@ -383,7 +396,7 @@ main_heatmaps_DT_by_cluster_function(cluster_id=4,
 Each cluster's gene set was gathered and datatables were generated.
 
 #### ClusterA
-```{r echo=FALSE, warning=FALSE,message=FALSE,fig.height=7}
+```{r kmeans_dt1, echo=FALSE, warning=FALSE,message=FALSE,fig.height=7}
 main_heatmaps_DT_by_cluster_function(cluster_id=1,
                                      cl_in=kout,
                                      cntrl_in=cntrl,
@@ -392,7 +405,7 @@ main_heatmaps_DT_by_cluster_function(cluster_id=1,
 ```
 
 #### ClusterB
-```{r echo=FALSE, warning=FALSE,message=FALSE,fig.height=7}
+```{r kmeans_dt2, echo=FALSE, warning=FALSE,message=FALSE,fig.height=7}
 main_heatmaps_DT_by_cluster_function(cluster_id=2,
                                      cl_in=kout,
                                      cntrl_in=cntrl,
@@ -401,7 +414,7 @@ main_heatmaps_DT_by_cluster_function(cluster_id=2,
 ```
 
 #### ClusterC
-```{r echo=FALSE, warning=FALSE,message=FALSE,fig.height=7}
+```{r kmeans_dt3, echo=FALSE, warning=FALSE,message=FALSE,fig.height=7}
 main_heatmaps_DT_by_cluster_function(cluster_id=3,
                                      cl_in=kout,
                                      cntrl_in=cntrl,
@@ -410,7 +423,7 @@ main_heatmaps_DT_by_cluster_function(cluster_id=3,
 ```
 
 #### ClusterD
-```{r echo=FALSE, warning=FALSE,message=FALSE,fig.height=7}
+```{r kmeans_dt4, echo=FALSE, warning=FALSE,message=FALSE,fig.height=7}
 main_heatmaps_DT_by_cluster_function(cluster_id=4,
                                      cl_in=kout,
                                      cntrl_in=cntrl,
