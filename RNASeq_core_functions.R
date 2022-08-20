@@ -448,10 +448,9 @@ ora_plus_plot <- function(gl,t2g,contrast_in,n_show=3){
                       family = NULL, lineheight = NULL)
   } else{
     p1 = dotplot(result,
-                 title=paste0("ORA:",t2g,"\n",contrast_in[1],"-",contrast_in[2]),
+                 title=paste0(contrast_in[1],"-",contrast_in[2],"\nORA:",t2g),
                  font.size = 6, showCategory=n_show)
   }
-  
   # add small legend
   pf = addSmallLegend(p1)
   return(pf)
@@ -639,9 +638,9 @@ create_dts<-function(type_in,t2g,contras,n_in,db_list){
       }
       
       # select cols
-      output_df=merged_df[,c("anno","ID","setSize","percent_included","p.adjust",
+      output_df=merged_df[,c("anno","ID","Description","setSize","percent_included","p.adjust",
                              "enrichmentScore","NES","core_enrichment")]
-      colnames(output_df)=c("anno_db","ID","total_genes","percent_included","p.adj",
+      colnames(output_df)=c("anno_db","ID","Desc","total_genes","percent_included","p.adj",
                             "enrichmentScore","NES","genes_included")
     } else{
       # pull values for genes included, genes in set
