@@ -1,15 +1,15 @@
-####################
+################################################################################
 # formatting
-####################
+################################################################################
 # shorten colnmaes
 shorten_names<-function(list_in){
   shortened_names=sub("", '',list_in)
   return(shortened_names)
 }
 
-####################
+################################################################################
 # DE
-####################
+################################################################################
 deg_comparison<-function(cntrl_in,treat_in){
   contras=c(treat_in,cntrl_in)
   
@@ -87,7 +87,7 @@ deg_group_add<-function(cntrl_in,treat_in){
   colnames(tmp_deg)=paste0(treat_in,"_",colnames(tmp_deg))
 }
 
-####################
+################################################################################
 # heatmaps
 ###################
 # creates gene df of top n_in significant genes per sample
@@ -217,9 +217,9 @@ draw_colnames_45 <- function (coln, gaps, ...) {
 # creates heatmap
 generate_heat_map<-function(df_in,show_names="ON"){
   
-  ####################
+  ################################################################################
   # formatting
-  #####################
+  #################################################################################
   # Overwrite pheatmaps default draw_colnames with new version
   assignInNamespace(x="draw_colnames", value="draw_colnames_45",ns=asNamespace("pheatmap")) 
   
@@ -227,9 +227,9 @@ generate_heat_map<-function(df_in,show_names="ON"){
   paletteLength <- 1000
   mycolors <- colorRampPalette(c("blue","white","red"), interpolate = "linear")(paletteLength)
   
-  ####################
+  ################################################################################
   # metadata
-  ####################
+  ################################################################################
   # Creating Dataframe to map samplenames to groups
   meta = groups_df
   groups <- data.frame(as.factor(meta$group))
@@ -244,9 +244,9 @@ generate_heat_map<-function(df_in,show_names="ON"){
   # set title
   title_in=paste0("Significant Genes (N=",nrow(df_in),")")
   
-  ####################
+  ################################################################################
   # function
-  ####################
+  ################################################################################
   if (show_names=="OFF"){
     pheatmap(df_in, 
              scale = "none", main=title_in,
@@ -261,7 +261,7 @@ generate_heat_map<-function(df_in,show_names="ON"){
   
 }
 
-####################
+################################################################################
 # volcano plots
 ###################
 generate_volcano_plots<-function(cntrl_in,treat_in,type_in){
@@ -302,9 +302,9 @@ generate_volcano_plots<-function(cntrl_in,treat_in,type_in){
   return(p)
 }
 
-######################################################################
+################################################################################
 # functions ORA/GSEA
-######################################################################
+################################################################################
 capture_entrezids<-function(input_df){
   sep_df=input_df %>%
     separate(ensid_gene,sep="[|]",c("ENSEMBL","SYMBOL"))%>%
@@ -741,9 +741,9 @@ main_gsea_ora_function<-function(cntrl_in,treat_in,db_list,top_path_value,ORA_fl
   }
 }
 
-######################################################################
+################################################################################
 # functions kmeans analysis
-######################################################################
+################################################################################
 # read in degs and created merged df of all contrasts
 create_deg_all_df<-function(treat_in,cntrl_in){
   #set contrasat
@@ -963,9 +963,9 @@ main_heatmaps_DT_by_cluster_function<-function(cl_in,cluster_id,cntrl_in,treatme
     generate_heat_map(heat_df,"")
   }
 }
-######################################################################
+################################################################################
 # functions secondary pathway analysis
-######################################################################
+################################################################################
 #create heatmap and DT
 generate_heat_map_select<-function(select_deg,contras){
   # prep df for heatmap generation
