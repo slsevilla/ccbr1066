@@ -1036,7 +1036,8 @@ main_selectpath_function<-function(cntrl_in,treat_in,type_in,t2g,path_id){
   
   # subset deg for genes,
   #convert ENTREZID if necessary
-  if ((t2g!="C1") | (t2g!="C2:BIOCARTA") | (t2g!="H")){
+  special_dbs=c("C1","C2:BIOCARTA","H")
+  if (t2g %ni% special_dbs){
     gene_ref_db = capture_entrezids(deg)
     genes_in_pathway=subset(gene_ref_db,ENTREZID %in% genes_in_pathway)$gene
   } 
