@@ -337,7 +337,7 @@ capture_entrezids<-function(input_df){
   for (i in rownames(filter_list)){
     eid=filter_list[i,"ENSEMBL"]
     #pull symbol from deg
-    gene_output2[i,"SYMBOL"]=subset(sep_df,ENSEMBL==eid)$SYMBOL
+    gene_output2[i,"SYMBOL"]=unique(subset(sep_df,ENSEMBL==eid)$SYMBOL)
   }
   
   # fill in missing ENSEMBL
