@@ -95,7 +95,6 @@ rownames(groups_df)=groups_df$sampleid
 contrast_df=read.csv(paste0(input_dir,"contrasts.tab"),header=FALSE,sep="\t")
 contrast_df$V1=gsub("  "," ",contrast_df$V1)
 contrast_df$V1=gsub("  "," ",contrast_df$V1)
-#contrast_df=contrast_df %>% separate(V1, c('CNTRL', 'TREATMENT'),sep=" ")
 colnames(contrast_df)=c("CNTRL","TREATMENT")
 contrast_df$contrast=paste0(contrast_df$CNTRL,"_vs_",contrast_df$TREATMENT)
 

@@ -269,9 +269,10 @@ generate_volcano_plots<-function(cntrl_in,treat_in,type_in){
   treat_in=treatment
   i = 1
   
+  #fpath
   contras=c(treat_in,cntrl_in)
-  source_path=paste0(input_dir,"DEG_",cntrl_in,"-",treat_in,"_0.5_0.5/")
-  res1=read.csv(paste0(output_dir,"DESeq2_",contras[1],"-", contras[2],"_DEG_allgenes_res1.txt"),sep="\t")
+  fpath=paste0(output_dir,"DESeq2_",contras[1],"-", contras[2],"_DEG_allgenes_res1.txt")
+  res1=read.csv(fpath,sep="\t")
   
   # Volcano Plots
   if (type_in=="pvalue"){
