@@ -1,2 +1,4 @@
 /._*.R*
 *html
+.Rproj.user
+.Rhistory
