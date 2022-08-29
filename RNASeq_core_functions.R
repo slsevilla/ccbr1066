@@ -433,7 +433,10 @@ ora_plus_plot <- function(gl,t2g,contrast_in,n_show=3){
   pulled_db=db_lookup(t2g)
   
   # run ORA
-  result=enricher(gene=gl, TERM2GENE=pulled_db, pvalueCutoff = padj_cutoff)
+  result=enricher(gene=gl, 
+                  TERM2GENE=pulled_db, 
+                  pvalueCutoff = padj_cutoff,
+                  minGSSize=15)
   resultdf=as.data.frame(result)
   
   # write out pathways file
@@ -550,7 +553,6 @@ gsea_plus_plot <- function(gl,t2g,contrast_in,select_flag="OFF"){
       )
       legend<-get_legend(p1)
       pf=cowplot::plot_grid(pcol,legend,rel_widths = c(3, .4))
-      print(pf)
     }
     return(pf)
   }
